@@ -24,7 +24,18 @@
       "role": "owner",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "permissions": [
+        "products.manage",
+        "products.delete",
+        "customers.manage",
+        "orders.create",
+        "orders.view",
+        "purchases.manage",
+        "adjustments.manage",
+        "settings.manage",
+        "users.manage"
+      ]
     },
     {
       "id": 2,
@@ -34,16 +45,16 @@
       "role": "assistant",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "permissions": [
+        "orders.create",
+        "orders.view",
+        "purchases.manage",
+        "adjustments.manage"
+      ]
     }
   ],
-  "sessions": [
-    {
-      "token": "54d65d9d-b21e-4536-b077-a16e61f79808",
-      "user_id": 1,
-      "created_at": "2026-04-01T07:08:43.190Z"
-    }
-  ],
+  "sessions": [],
   "products": [
     {
       "id": 1,
@@ -56,7 +67,8 @@
       "unit": "áo",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "image_url": ""
     },
     {
       "id": 2,
@@ -69,7 +81,8 @@
       "unit": "bộ",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "image_url": ""
     },
     {
       "id": 3,
@@ -82,7 +95,8 @@
       "unit": "bộ",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "image_url": ""
     },
     {
       "id": 4,
@@ -95,7 +109,8 @@
       "unit": "cái",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "image_url": ""
     },
     {
       "id": 5,
@@ -108,7 +123,8 @@
       "unit": "cái",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "image_url": ""
     },
     {
       "id": 6,
@@ -121,7 +137,8 @@
       "unit": "cái",
       "is_active": 1,
       "created_at": "2026-04-01T00:00:00.000Z",
-      "updated_at": "2026-04-01T00:00:00.000Z"
+      "updated_at": "2026-04-01T00:00:00.000Z",
+      "image_url": ""
     }
   ],
   "customers": [

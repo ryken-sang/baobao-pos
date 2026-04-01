@@ -4,6 +4,31 @@ let pool;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+
+const ALL_PERMISSIONS = [
+  'products.manage',
+  'products.delete',
+  'customers.manage',
+  'orders.create',
+  'orders.view',
+  'purchases.manage',
+  'adjustments.manage',
+  'settings.manage',
+  'users.manage'
+];
+
+function defaultPermissions(role) {
+  if (role === 'owner') return [...ALL_PERMISSIONS];
+  return ['orders.create', 'orders.view', 'purchases.manage', 'adjustments.manage'];
+}
+
+function normalizePermissionList(list, role) {
+  const fallback = defaultPermissions(role);
+  if (!Array.isArray(list) || list.length === 0) return fallback;
+  return [...new Set(list.filter((item) => ALL_PERMISSIONS.includes(item)))];
+}
+
+
 function startOfDay(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -48,6 +73,7 @@ function defaultUsers(now) {
       password: process.env.BOSS_PASSWORD || 'Vinper.619623!',
       name: process.env.BOSS_NAME || 'Sang',
       role: 'owner',
+      permissions: defaultPermissions('owner'),
       is_active: true,
       created_at: now,
       updated_at: now
@@ -57,6 +83,7 @@ function defaultUsers(now) {
       password: process.env.ASSISTANT_PASSWORD || 'Baobaoshop',
       name: process.env.ASSISTANT_NAME || 'Trợ lý BaoBao',
       role: 'assistant',
+      permissions: defaultPermissions('assistant'),
       is_active: true,
       created_at: now,
       updated_at: now
@@ -76,12 +103,12 @@ function buildDefaultData() {
     },
     users: defaultUsers(now),
     products: [
-      { sku: 'BB-PJ-001', name: 'Áo lụa Latin cu shin', category: 'Pyjama', price: 199000, cost: 110000, stock: 24, unit: 'áo', is_active: true, created_at: now, updated_at: now },
-      { sku: 'BB-PJ-002', name: 'Set pyjama Dâu Tây', category: 'Pyjama', price: 219000, cost: 125000, stock: 18, unit: 'bộ', is_active: true, created_at: now, updated_at: now },
-      { sku: 'BB-PJ-003', name: 'Set pyjama Kem Xanh', category: 'Pyjama', price: 239000, cost: 132000, stock: 9, unit: 'bộ', is_active: true, created_at: now, updated_at: now },
-      { sku: 'BB-HM-001', name: 'Đầm ngủ lụa Latin', category: 'Homewear', price: 269000, cost: 150000, stock: 7, unit: 'cái', is_active: true, created_at: now, updated_at: now },
-      { sku: 'BB-AC-001', name: 'Kẹp tóc nơ mềm', category: 'Phụ kiện', price: 39000, cost: 12000, stock: 32, unit: 'cái', is_active: true, created_at: now, updated_at: now },
-      { sku: 'BB-AC-002', name: 'Túi quà BaoBao', category: 'Phụ kiện', price: 12000, cost: 4000, stock: 55, unit: 'cái', is_active: true, created_at: now, updated_at: now }
+      { sku: 'BB-PJ-001', name: 'Áo lụa Latin cu shin', category: 'Pyjama', price: 199000, cost: 110000, stock: 24, unit: 'áo', image_url: '', is_active: true, created_at: now, updated_at: now },
+      { sku: 'BB-PJ-002', name: 'Set pyjama Dâu Tây', category: 'Pyjama', price: 219000, cost: 125000, stock: 18, unit: 'bộ', image_url: '', is_active: true, created_at: now, updated_at: now },
+      { sku: 'BB-PJ-003', name: 'Set pyjama Kem Xanh', category: 'Pyjama', price: 239000, cost: 132000, stock: 9, unit: 'bộ', image_url: '', is_active: true, created_at: now, updated_at: now },
+      { sku: 'BB-HM-001', name: 'Đầm ngủ lụa Latin', category: 'Homewear', price: 269000, cost: 150000, stock: 7, unit: 'cái', image_url: '', is_active: true, created_at: now, updated_at: now },
+      { sku: 'BB-AC-001', name: 'Kẹp tóc nơ mềm', category: 'Phụ kiện', price: 39000, cost: 12000, stock: 32, unit: 'cái', image_url: '', is_active: true, created_at: now, updated_at: now },
+      { sku: 'BB-AC-002', name: 'Túi quà BaoBao', category: 'Phụ kiện', price: 12000, cost: 4000, stock: 55, unit: 'cái', image_url: '', is_active: true, created_at: now, updated_at: now }
     ],
     customers: [
       { name: 'Khách lẻ', phone: '', email: '', points: 0, note: 'Khách mua tại quầy', created_at: now, updated_at: now },
@@ -111,6 +138,7 @@ function sanitizeUser(user) {
     username: user.username,
     name: user.name,
     role: user.role,
+    permissions: normalizePermissionList(user.permissions, user.role),
     is_active: user.is_active,
     created_at: user.created_at,
     updated_at: user.updated_at
@@ -146,6 +174,7 @@ export async function initializePostgresStore() {
       password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
       role TEXT NOT NULL,
+      permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -166,6 +195,7 @@ export async function initializePostgresStore() {
       cost INTEGER NOT NULL DEFAULT 0,
       stock INTEGER NOT NULL DEFAULT 0,
       unit TEXT DEFAULT 'cái',
+      image_url TEXT DEFAULT '',
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -239,6 +269,8 @@ export async function initializePostgresStore() {
   `);
 
   await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT DEFAULT '';
     ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS product_name TEXT DEFAULT '';
     ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT '';
     ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS unit_cost INTEGER DEFAULT 0;
@@ -258,9 +290,18 @@ export async function initializePostgresStore() {
   if (userRows.length === 0) {
     for (const user of defaults.users) {
       await q(
-        'INSERT INTO users (username, password_hash, name, role, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [user.username, hashPassword(user.password), user.name, user.role, user.is_active, user.created_at, user.updated_at]
+        'INSERT INTO users (username, password_hash, name, role, permissions, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [user.username, hashPassword(user.password), user.name, user.role, JSON.stringify(user.permissions), user.is_active, user.created_at, user.updated_at]
       );
+    }
+  }
+
+
+  const allUsers = await q('SELECT id, role, permissions FROM users');
+  for (const user of allUsers) {
+    const normalized = normalizePermissionList(user.permissions, user.role);
+    if (JSON.stringify(normalized) !== JSON.stringify(user.permissions || [])) {
+      await q('UPDATE users SET permissions = $2, updated_at = NOW() WHERE id = $1', [user.id, JSON.stringify(normalized)]);
     }
   }
 
@@ -268,8 +309,8 @@ export async function initializePostgresStore() {
   if (productRows.length === 0) {
     for (const product of defaults.products) {
       await q(
-        'INSERT INTO products (sku, name, category, price, cost, stock, unit, is_active, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [product.sku, product.name, product.category, product.price, product.cost, product.stock, product.unit, product.is_active, product.created_at, product.updated_at]
+        'INSERT INTO products (sku, name, category, price, cost, stock, unit, image_url, is_active, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [product.sku, product.name, product.category, product.price, product.cost, product.stock, product.unit, product.image_url || '', product.is_active, product.created_at, product.updated_at]
       );
     }
   }
@@ -321,6 +362,45 @@ export async function logoutToken(token) {
   await q('DELETE FROM sessions WHERE token = $1', [token]);
 }
 
+export async function getUsers() {
+  const rows = await q('SELECT * FROM users ORDER BY created_at DESC');
+  return rows.map(sanitizeUser);
+}
+
+export async function createUser(payload) {
+  const username = String(payload.username || '').trim();
+  const password = String(payload.password || '');
+  const name = String(payload.name || '').trim();
+  const role = String(payload.role || 'assistant') === 'owner' ? 'owner' : 'assistant';
+  if (!username || !password || !name) throw new Error('Tên, tài khoản và mật khẩu là bắt buộc.');
+  const exists = await q('SELECT id FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1', [username]);
+  if (exists[0]) throw new Error('Tài khoản đã tồn tại.');
+  const rows = await q(
+    `INSERT INTO users (username, password_hash, name, role, permissions, is_active, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING *`,
+    [username, hashPassword(password), name, role, JSON.stringify(normalizePermissionList(payload.permissions, role)), Number(payload.is_active ?? 1) === 1]
+  );
+  return sanitizeUser(rows[0]);
+}
+
+export async function updateUser(id, payload, actor) {
+  const rows = await q('SELECT * FROM users WHERE id = $1 LIMIT 1', [id]);
+  const current = rows[0];
+  if (!current) throw new Error('Không tìm thấy tài khoản.');
+  if (Number(current.id) === Number(actor.id) && Number(payload.is_active ?? 1) !== 1) {
+    throw new Error('Không thể tự khóa tài khoản đang đăng nhập.');
+  }
+  const role = current.role === 'owner' ? 'owner' : (String(payload.role || current.role || 'assistant') === 'owner' ? 'owner' : 'assistant');
+  const permissions = current.role === 'owner' ? defaultPermissions('owner') : normalizePermissionList(payload.permissions, role);
+  const updated = await q(
+    `UPDATE users SET name = $2, role = $3, permissions = $4, is_active = $5, updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [id, String(payload.name || current.name).trim(), role, JSON.stringify(permissions), current.role === 'owner' ? true : (Number(payload.is_active ?? current.is_active) === 1)]
+  )
+  return sanitizeUser(updated[0]);
+}
+
 export async function getSettings() {
   const rows = await q('SELECT * FROM settings WHERE id = 1 LIMIT 1');
   const row = rows[0];
@@ -358,6 +438,7 @@ function mapProduct(row) {
     cost: Number(row.cost),
     stock: Number(row.stock),
     unit: row.unit,
+    image_url: row.image_url || '',
     is_active: row.is_active ? 1 : 0,
     created_at: row.created_at,
     updated_at: row.updated_at
@@ -444,7 +525,7 @@ export async function getOrderById(id) {
   const rows = await q('SELECT * FROM orders WHERE id = $1 LIMIT 1', [id]);
   const order = rows[0];
   if (!order) return null;
-  const items = await q('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id ASC', [id]);
+  const items = await q(`SELECT oi.*, COALESCE(p.image_url, '') AS image_url FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = $1 ORDER BY oi.id ASC`, [id]);
   const settings = await getSettings();
   return {
     ...mapOrder(order),
@@ -464,8 +545,8 @@ export async function createProduct(payload) {
   const duplicate = await q('SELECT id FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [String(payload.sku).trim()]);
   if (duplicate[0]) throw new Error('SKU đã tồn tại.');
   const rows = await q(
-    `INSERT INTO products (sku, name, category, price, cost, stock, unit, is_active, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,NOW(),NOW()) RETURNING *`,
+    `INSERT INTO products (sku, name, category, price, cost, stock, unit, image_url, is_active, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,NOW(),NOW()) RETURNING *`,
     [
       String(payload.sku).trim(),
       String(payload.name).trim(),
@@ -473,7 +554,8 @@ export async function createProduct(payload) {
       Number(payload.price || 0),
       Number(payload.cost || 0),
       Number(payload.stock || 0),
-      String(payload.unit || 'cái').trim()
+      String(payload.unit || 'cái').trim(),
+      String(payload.image_url || '').trim()
     ]
   );
   return mapProduct(rows[0]);
@@ -484,7 +566,7 @@ export async function updateProduct(id, payload) {
   if (duplicate[0]) throw new Error('SKU đã tồn tại.');
   const rows = await q(
     `UPDATE products
-     SET sku = $2, name = $3, category = $4, price = $5, cost = $6, stock = $7, unit = $8, is_active = $9, updated_at = NOW()
+     SET sku = $2, name = $3, category = $4, price = $5, cost = $6, stock = $7, unit = $8, image_url = $9, is_active = $10, updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
     [
@@ -496,6 +578,7 @@ export async function updateProduct(id, payload) {
       Number(payload.cost || 0),
       Number(payload.stock || 0),
       String(payload.unit || 'cái').trim(),
+      String(payload.image_url || '').trim(),
       Number(payload.is_active ?? 1) === 1
     ]
   );
@@ -663,8 +746,8 @@ export async function createPurchase(payload, user) {
 }
 
 export async function getPurchases() {
-  const rows = await q('SELECT * FROM purchases ORDER BY created_at DESC LIMIT 100');
-  return rows.map((row) => ({ ...row, quantity: Number(row.quantity), cost: Number(row.cost), total_cost: Number(row.total_cost) }));
+  const rows = await q(`SELECT pu.*, COALESCE(p.image_url, '') AS image_url FROM purchases pu LEFT JOIN products p ON p.id = pu.product_id ORDER BY pu.created_at DESC LIMIT 100`);
+  return rows.map((row) => ({ ...row, quantity: Number(row.quantity), cost: Number(row.cost), total_cost: Number(row.total_cost), image_url: row.image_url || '' }));
 }
 
 export async function createAdjustment(payload, user) {
@@ -704,7 +787,7 @@ export async function createAdjustment(payload, user) {
 }
 
 export async function getAdjustments() {
-  const rows = await q(`SELECT id, product_id, COALESCE(product_name, p.name) AS product_name, quantity, note, COALESCE(reason, '') AS reason, unit_cost, total_cost, created_at, created_by
+  const rows = await q(`SELECT id, product_id, COALESCE(product_name, p.name) AS product_name, COALESCE(p.image_url, '') AS image_url, quantity, note, COALESCE(reason, '') AS reason, unit_cost, total_cost, created_at, created_by
                         FROM inventory_transactions it
                         LEFT JOIN products p ON p.id = it.product_id
                         WHERE type = 'adjustment_out'
@@ -715,7 +798,8 @@ export async function getAdjustments() {
     quantity: Math.abs(Number(row.quantity)),
     unit_cost: Number(row.unit_cost || 0),
     total_cost: Number(row.total_cost || 0),
-    reason: row.reason || 'Hàng lỗi'
+    reason: row.reason || 'Hàng lỗi',
+    image_url: row.image_url || ''
   }));
 }
 

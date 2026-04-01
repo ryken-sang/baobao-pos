@@ -55,5 +55,8 @@ export const api = {
   getPurchases: () => request('/purchases'),
   createPurchase: (payload) => request('/purchases', { method: 'POST', body: JSON.stringify(payload) }),
   getAdjustments: () => request('/adjustments'),
-  createAdjustment: (payload) => request('/adjustments', { method: 'POST', body: JSON.stringify(payload) })
+  createAdjustment: (payload) => request('/adjustments', { method: 'POST', body: JSON.stringify(payload) }),
+  getUsers: () => request('/users'),
+  createUser: (payload) => request('/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
 };

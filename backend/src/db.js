@@ -47,3 +47,6 @@ export async function getPurchases(...args) { return ensureStore().getPurchases(
 export async function getAdjustments(...args) { return ensureStore().getAdjustments(...args); }
 export async function createAdjustment(...args) { return ensureStore().createAdjustment(...args); }
 export async function getReports(...args) { return ensureStore().getReports(...args); }
+export async function getUsers(...args) { return ensureStore().getUsers(...args); }
+export async function createUser(...args) { return ensureStore().createUser(...args); }
+export async function updateUser(...args) { return ensureStore().updateUser(...args); }

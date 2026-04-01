@@ -8,6 +8,31 @@ const __dirname = path.dirname(__filename);
 const dataFile = path.join(__dirname, '..', 'data', 'store.json');
 const seedFile = path.join(__dirname, '..', 'data', 'store.seed.json');
 
+
+const ALL_PERMISSIONS = [
+  'products.manage',
+  'products.delete',
+  'customers.manage',
+  'orders.create',
+  'orders.view',
+  'purchases.manage',
+  'adjustments.manage',
+  'settings.manage',
+  'users.manage'
+];
+
+function defaultPermissions(role) {
+  if (role === 'owner') return [...ALL_PERMISSIONS];
+  return ['orders.create', 'orders.view', 'purchases.manage', 'adjustments.manage'];
+}
+
+function normalizePermissionList(list, role) {
+  const fallback = defaultPermissions(role);
+  if (!Array.isArray(list) || list.length === 0) return fallback;
+  return [...new Set(list.filter((item) => ALL_PERMISSIONS.includes(item)))];
+}
+
+
 function startOfDay(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -53,6 +78,7 @@ function defaultUsers(now) {
       password: 'Vinper.619623!',
       name: 'Sang',
       role: 'owner',
+      permissions: defaultPermissions('owner'),
       is_active: 1,
       created_at: now,
       updated_at: now
@@ -63,6 +89,7 @@ function defaultUsers(now) {
       password: 'Baobaoshop',
       name: 'Trợ lý BaoBao',
       role: 'assistant',
+      permissions: defaultPermissions('assistant'),
       is_active: 1,
       created_at: now,
       updated_at: now
@@ -92,12 +119,12 @@ function buildDefaultData() {
     users: defaultUsers(now),
     sessions: [],
     products: [
-      { id: 1, sku: 'BB-PJ-001', name: 'Áo lụa Latin cu shin', category: 'Pyjama', price: 199000, cost: 110000, stock: 24, unit: 'áo', is_active: 1, created_at: now, updated_at: now },
-      { id: 2, sku: 'BB-PJ-002', name: 'Set pyjama Dâu Tây', category: 'Pyjama', price: 219000, cost: 125000, stock: 18, unit: 'bộ', is_active: 1, created_at: now, updated_at: now },
-      { id: 3, sku: 'BB-PJ-003', name: 'Set pyjama Kem Xanh', category: 'Pyjama', price: 239000, cost: 132000, stock: 9, unit: 'bộ', is_active: 1, created_at: now, updated_at: now },
-      { id: 4, sku: 'BB-HM-001', name: 'Đầm ngủ lụa Latin', category: 'Homewear', price: 269000, cost: 150000, stock: 7, unit: 'cái', is_active: 1, created_at: now, updated_at: now },
-      { id: 5, sku: 'BB-AC-001', name: 'Kẹp tóc nơ mềm', category: 'Phụ kiện', price: 39000, cost: 12000, stock: 32, unit: 'cái', is_active: 1, created_at: now, updated_at: now },
-      { id: 6, sku: 'BB-AC-002', name: 'Túi quà BaoBao', category: 'Phụ kiện', price: 12000, cost: 4000, stock: 55, unit: 'cái', is_active: 1, created_at: now, updated_at: now }
+      { id: 1, sku: 'BB-PJ-001', name: 'Áo lụa Latin cu shin', category: 'Pyjama', price: 199000, cost: 110000, stock: 24, unit: 'áo', image_url: '', is_active: 1, created_at: now, updated_at: now },
+      { id: 2, sku: 'BB-PJ-002', name: 'Set pyjama Dâu Tây', category: 'Pyjama', price: 219000, cost: 125000, stock: 18, unit: 'bộ', image_url: '', is_active: 1, created_at: now, updated_at: now },
+      { id: 3, sku: 'BB-PJ-003', name: 'Set pyjama Kem Xanh', category: 'Pyjama', price: 239000, cost: 132000, stock: 9, unit: 'bộ', image_url: '', is_active: 1, created_at: now, updated_at: now },
+      { id: 4, sku: 'BB-HM-001', name: 'Đầm ngủ lụa Latin', category: 'Homewear', price: 269000, cost: 150000, stock: 7, unit: 'cái', image_url: '', is_active: 1, created_at: now, updated_at: now },
+      { id: 5, sku: 'BB-AC-001', name: 'Kẹp tóc nơ mềm', category: 'Phụ kiện', price: 39000, cost: 12000, stock: 32, unit: 'cái', image_url: '', is_active: 1, created_at: now, updated_at: now },
+      { id: 6, sku: 'BB-AC-002', name: 'Túi quà BaoBao', category: 'Phụ kiện', price: 12000, cost: 4000, stock: 55, unit: 'cái', image_url: '', is_active: 1, created_at: now, updated_at: now }
     ],
     customers: [
       { id: 1, name: 'Khách lẻ', phone: '', email: '', points: 0, note: 'Khách mua tại quầy', created_at: now, updated_at: now },
@@ -158,6 +185,11 @@ function normalizeUsers(data, defaults) {
       next.role = 'assistant';
       changed = true;
     }
+    const normalizedPermissions = normalizePermissionList(next.permissions, next.role);
+    if (JSON.stringify(normalizedPermissions) !== JSON.stringify(next.permissions || [])) {
+      next.permissions = normalizedPermissions;
+      changed = true;
+    }
     return next;
   });
   return changed;
@@ -188,6 +220,15 @@ function normalizeData(data) {
   if (!Array.isArray(data.purchases)) {
     data.purchases = [];
     changed = true;
+  }
+  if (Array.isArray(data.products)) {
+    data.products = data.products.map((product) => {
+      if (product.image_url === undefined) {
+        changed = true;
+        return { ...product, image_url: '' };
+      }
+      return product;
+    });
   }
   changed = normalizeUsers(data, defaults) || changed;
   return { data, changed };
@@ -231,6 +272,7 @@ function sanitizeUser(user) {
     username: user.username,
     name: user.name,
     role: user.role,
+    permissions: normalizePermissionList(user.permissions, user.role),
     is_active: user.is_active,
     created_at: user.created_at,
     updated_at: user.updated_at
@@ -265,6 +307,63 @@ export function logoutToken(token) {
   const data = readData();
   data.sessions = (data.sessions || []).filter((item) => item.token !== token);
   writeData(data);
+}
+
+export function getUsers() {
+  const data = readData();
+  return sortByNewest(data.users).map(sanitizeUser);
+}
+
+export function createUser(payload) {
+  const data = readData();
+  const username = String(payload.username || '').trim();
+  const password = String(payload.password || '');
+  const name = String(payload.name || '').trim();
+  const role = String(payload.role || 'assistant');
+  if (!username || !password || !name) throw new Error('Tên, tài khoản và mật khẩu là bắt buộc.');
+  if (data.users.some((item) => item.username.toLowerCase() === username.toLowerCase())) {
+    throw new Error('Tài khoản đã tồn tại.');
+  }
+  const now = new Date().toISOString();
+  const user = {
+    id: nextId(data, 'users'),
+    username,
+    password,
+    name,
+    role: role === 'owner' ? 'owner' : 'assistant',
+    permissions: normalizePermissionList(payload.permissions, role === 'owner' ? 'owner' : 'assistant'),
+    is_active: Number(payload.is_active ?? 1) === 1 ? 1 : 0,
+    created_at: now,
+    updated_at: now
+  };
+  data.users.push(user);
+  writeData(data);
+  return sanitizeUser(user);
+}
+
+export function updateUser(id, payload, actor) {
+  const data = readData();
+  const index = data.users.findIndex((item) => item.id === id);
+  if (index === -1) throw new Error('Không tìm thấy tài khoản.');
+  const current = data.users[index];
+  const role = current.role === 'owner' ? 'owner' : String(payload.role || current.role || 'assistant');
+  if (current.id === actor.id && Number(payload.is_active ?? 1) !== 1) {
+    throw new Error('Không thể tự khóa tài khoản đang đăng nhập.');
+  }
+  const next = {
+    ...current,
+    name: String(payload.name || current.name).trim(),
+    is_active: Number(payload.is_active ?? current.is_active) === 1 ? 1 : 0,
+    permissions: normalizePermissionList(payload.permissions, role),
+    updated_at: new Date().toISOString()
+  };
+  if (current.role === 'owner') {
+    next.permissions = defaultPermissions('owner');
+    next.is_active = 1;
+  }
+  data.users[index] = next;
+  writeData(data);
+  return sanitizeUser(next);
 }
 
 export function getSettings() {
@@ -311,7 +410,11 @@ export function getOrderById(id) {
   const data = readData();
   const order = data.orders.find((item) => item.id === id);
   if (!order) return null;
-  const items = data.orderItems.filter((item) => item.order_id === id);
+  const productMap = new Map(data.products.map((product) => [Number(product.id), product]));
+  const items = data.orderItems.filter((item) => item.order_id === id).map((item) => ({
+    ...item,
+    image_url: productMap.get(Number(item.product_id))?.image_url || ''
+  }));
   return { ...order, items, settings: data.settings };
 }
 
@@ -330,6 +433,7 @@ export function createProduct(payload) {
     cost: Number(payload.cost || 0),
     stock: Number(payload.stock || 0),
     unit: String(payload.unit || 'cái').trim(),
+    image_url: String(payload.image_url || '').trim(),
     is_active: 1,
     created_at: now,
     updated_at: now
@@ -354,6 +458,7 @@ export function updateProduct(id, payload) {
     cost: Number(payload.cost || 0),
     stock: Number(payload.stock || 0),
     unit: String(payload.unit || 'cái').trim(),
+    image_url: String(payload.image_url || '').trim(),
     is_active: Number(payload.is_active ?? 1),
     updated_at: new Date().toISOString()
   };
@@ -559,7 +664,12 @@ export function createPurchase(payload, user) {
 }
 
 export function getPurchases() {
-  return sortByNewest(readData().purchases).slice(0, 100);
+  const data = readData();
+  const productMap = new Map(data.products.map((product) => [Number(product.id), product]));
+  return sortByNewest(data.purchases).slice(0, 100).map((purchase) => ({
+    ...purchase,
+    image_url: productMap.get(Number(purchase.product_id))?.image_url || ''
+  }));
 }
 
 export function createAdjustment(payload, user) {
@@ -602,6 +712,7 @@ export function getAdjustments() {
   return sortByNewest(data.inventoryTransactions.filter((item) => item.type === 'adjustment_out')).slice(0, 100).map((item) => ({
     ...item,
     product_name: item.product_name || data.products.find((product) => product.id === item.product_id)?.name || `SP #${item.product_id}`,
+    image_url: data.products.find((product) => Number(product.id) === Number(item.product_id))?.image_url || '',
     quantity: Math.abs(Number(item.quantity || 0)),
     unit_cost: Number(item.unit_cost || 0),
     total_cost: Number(item.total_cost || 0),

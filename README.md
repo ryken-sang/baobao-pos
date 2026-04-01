@@ -1,4 +1,4 @@
-# BaoBao POS V6 — deploy-ready
+# BaoBao POS V11 — deploy-ready
 
 Bản này đã được chuẩn bị để đi theo **2 chế độ**:
 
@@ -112,3 +112,8 @@ INVOICE_FOOTER=Cảm ơn bạn đã mua hàng tại BaoBao 💖
 - Nếu **có `DATABASE_URL`**: app dùng PostgreSQL
 - Nếu **không có `DATABASE_URL`**: app dùng JSON local để test nhanh
 - File reset dữ liệu `npm --prefix backend run reset` chỉ dành cho mode JSON local
+
+
+## Mới ở V11
+- Tải ảnh trực tiếp từ điện thoại/PC trong form sản phẩm.
+- Ảnh được nén nhẹ ở frontend rồi lưu vào trường `image_url` để hiển thị ở lên đơn, nhập hàng, xuất hủy và lịch sử.
