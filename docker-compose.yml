@@ -1,0 +1,39 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: baobao_pos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PORT: 4000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@db:5432/baobao_pos
+      BOSS_USERNAME: vinper619623
+      BOSS_PASSWORD: Vinper.619623!
+      BOSS_NAME: Sang
+      ASSISTANT_USERNAME: baobao619623
+      ASSISTANT_PASSWORD: Baobaoshop
+      ASSISTANT_NAME: Trợ lý BaoBao
+      STORE_NAME: BaoBao POS
+      STORE_PHONE: '0824 005 119'
+      STORE_ADDRESS: BaoBao Pijama
+      INVOICE_FOOTER: Cảm ơn bạn đã mua hàng tại BaoBao 💖
+    ports:
+      - '4000:4000'
+
+volumes:
+  postgres_data:

@@ -1,0 +1,157 @@
+{
+  "counters": {
+    "products": 6,
+    "customers": 3,
+    "orders": 0,
+    "orderItems": 0,
+    "inventoryTransactions": 0,
+    "purchases": 0,
+    "users": 2
+  },
+  "settings": {
+    "storeName": "BaoBao POS",
+    "storePhone": "0824 005 119",
+    "storeAddress": "BaoBao Pijama",
+    "invoiceFooter": "Cảm ơn bạn đã mua hàng tại BaoBao 💖",
+    "currency": "VND"
+  },
+  "users": [
+    {
+      "id": 1,
+      "username": "vinper619623",
+      "password": "Vinper.619623!",
+      "name": "Sang",
+      "role": "owner",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "username": "baobao619623",
+      "password": "Baobaoshop",
+      "name": "Trợ lý BaoBao",
+      "role": "assistant",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    }
+  ],
+  "sessions": [],
+  "products": [
+    {
+      "id": 1,
+      "sku": "BB-PJ-001",
+      "name": "Áo lụa Latin cu shin",
+      "category": "Pyjama",
+      "price": 199000,
+      "cost": 110000,
+      "stock": 24,
+      "unit": "áo",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "sku": "BB-PJ-002",
+      "name": "Set pyjama Dâu Tây",
+      "category": "Pyjama",
+      "price": 219000,
+      "cost": 125000,
+      "stock": 18,
+      "unit": "bộ",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "sku": "BB-PJ-003",
+      "name": "Set pyjama Kem Xanh",
+      "category": "Pyjama",
+      "price": 239000,
+      "cost": 132000,
+      "stock": 9,
+      "unit": "bộ",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "sku": "BB-HM-001",
+      "name": "Đầm ngủ lụa Latin",
+      "category": "Homewear",
+      "price": 269000,
+      "cost": 150000,
+      "stock": 7,
+      "unit": "cái",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "sku": "BB-AC-001",
+      "name": "Kẹp tóc nơ mềm",
+      "category": "Phụ kiện",
+      "price": 39000,
+      "cost": 12000,
+      "stock": 32,
+      "unit": "cái",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "sku": "BB-AC-002",
+      "name": "Túi quà BaoBao",
+      "category": "Phụ kiện",
+      "price": 12000,
+      "cost": 4000,
+      "stock": 55,
+      "unit": "cái",
+      "is_active": 1,
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    }
+  ],
+  "customers": [
+    {
+      "id": 1,
+      "name": "Khách lẻ",
+      "phone": "",
+      "email": "",
+      "points": 0,
+      "note": "Khách mua tại quầy",
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Ngọc Anh",
+      "phone": "0909000111",
+      "email": "ngocanh@example.com",
+      "points": 120,
+      "note": "Khách thân thiết",
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Mai Trinh",
+      "phone": "0909000222",
+      "email": "",
+      "points": 45,
+      "note": "Hay mua pyjama mùa hè",
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "updated_at": "2026-04-01T00:00:00.000Z"
+    }
+  ],
+  "orders": [],
+  "orderItems": [],
+  "inventoryTransactions": [],
+  "purchases": []
+}

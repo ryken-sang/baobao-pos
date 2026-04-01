@@ -1,0 +1,16 @@
+{
+  "name": "BaoBao POS V6",
+  "short_name": "BaoBao POS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff7fb",
+  "theme_color": "#f472b6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
