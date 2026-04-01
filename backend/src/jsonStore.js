@@ -214,6 +214,17 @@ function sortByNewest(items) {
   return [...items].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
+function attachProductMeta(product, data) {
+  const purchases = (data.purchases || []).filter((item) => Number(item.product_id) === Number(product.id)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const lastPurchase = purchases[0] || null;
+  return {
+    ...product,
+    last_purchase_at: lastPurchase?.created_at || null,
+    last_purchase_cost: Number(lastPurchase?.cost || 0),
+    last_purchase_supplier: lastPurchase?.supplier || ''
+  };
+}
+
 function sanitizeUser(user) {
   return {
     id: user.id,
@@ -278,8 +289,10 @@ export function getProducts(search = '') {
   const data = readData();
   const keyword = search.trim().toLowerCase();
   const items = data.products.filter((product) => product.is_active === 1);
-  if (!keyword) return sortByNewest(items);
-  return items.filter((product) => [product.name, product.sku, product.category].some((field) => (field || '').toLowerCase().includes(keyword)));
+  const filtered = !keyword
+    ? sortByNewest(items)
+    : items.filter((product) => [product.name, product.sku, product.category].some((field) => (field || '').toLowerCase().includes(keyword)));
+  return filtered.map((product) => attachProductMeta(product, data));
 }
 
 export function getCustomers(search = '') {
@@ -357,6 +370,20 @@ export function hideProduct(id) {
   writeData(data);
 }
 
+export function deleteProduct(id) {
+  const data = readData();
+  const product = data.products.find((item) => item.id === id);
+  if (!product) throw new Error('Không tìm thấy sản phẩm.');
+  const hasOrder = data.orderItems.some((item) => Number(item.product_id) === Number(id));
+  const hasInventory = data.inventoryTransactions.some((item) => Number(item.product_id) === Number(id));
+  const hasPurchase = (data.purchases || []).some((item) => Number(item.product_id) === Number(id));
+  if (hasOrder || hasInventory || hasPurchase) {
+    throw new Error('Sản phẩm này đã có phát sinh kho hoặc đơn hàng, chỉ nên ẩn chứ không xóa hẳn.');
+  }
+  data.products = data.products.filter((item) => item.id !== id);
+  writeData(data);
+}
+
 export function createCustomer(payload) {
   const data = readData();
   const now = new Date().toISOString();
@@ -373,6 +400,17 @@ export function createCustomer(payload) {
   data.customers.push(record);
   writeData(data);
   return record;
+}
+
+export function deleteCustomer(id) {
+  const data = readData();
+  const customer = data.customers.find((item) => item.id === id);
+  if (!customer) throw new Error('Không tìm thấy khách hàng.');
+  if (String(customer.name).trim().toLowerCase() === 'khách lẻ') {
+    throw new Error('Không thể xóa khách lẻ mặc định.');
+  }
+  data.customers = data.customers.filter((item) => item.id !== id);
+  writeData(data);
 }
 
 export function createOrder(payload, user) {
@@ -447,7 +485,10 @@ export function createOrder(payload, user) {
       product_id: Number(item.product_id),
       type: 'sale',
       quantity: -Math.abs(quantity),
+      product_name: product.name,
       note: `Bán hàng ${orderNo}`,
+      unit_cost: Number(product.cost || 0),
+      total_cost: lineCost,
       created_at: now,
       created_by: user.name
     });
@@ -505,7 +546,10 @@ export function createPurchase(payload, user) {
     product_id: productId,
     type: 'purchase',
     quantity,
+    product_name: data.products[productIndex].name,
     note: `Nhập hàng #${purchaseId}`,
+    unit_cost: cost,
+    total_cost: quantity * cost,
     created_at: now,
     created_by: user.name
   });
@@ -516,6 +560,53 @@ export function createPurchase(payload, user) {
 
 export function getPurchases() {
   return sortByNewest(readData().purchases).slice(0, 100);
+}
+
+export function createAdjustment(payload, user) {
+  const data = readData();
+  const productId = Number(payload.product_id);
+  const quantity = Number(payload.quantity || 0);
+  if (!productId || quantity <= 0) throw new Error('Sản phẩm và số lượng xuất hủy phải hợp lệ.');
+  const productIndex = data.products.findIndex((item) => item.id === productId && item.is_active === 1);
+  if (productIndex === -1) throw new Error('Không tìm thấy sản phẩm để xuất hủy.');
+  const product = data.products[productIndex];
+  if (Number(product.stock) < quantity) throw new Error(`Tồn kho của ${product.name} không đủ để xuất hủy.`);
+
+  const now = new Date().toISOString();
+  const reason = String(payload.reason || 'Hàng lỗi').trim();
+  const note = String(payload.note || '').trim();
+  const unitCost = Number(product.cost || 0);
+  const transaction = {
+    id: nextId(data, 'inventoryTransactions'),
+    product_id: productId,
+    product_name: product.name,
+    type: 'adjustment_out',
+    quantity: -Math.abs(quantity),
+    reason,
+    note,
+    unit_cost: unitCost,
+    total_cost: unitCost * quantity,
+    created_at: now,
+    created_by: user.name
+  };
+
+  data.products[productIndex].stock -= quantity;
+  data.products[productIndex].updated_at = now;
+  data.inventoryTransactions.push(transaction);
+  writeData(data);
+  return transaction;
+}
+
+export function getAdjustments() {
+  const data = readData();
+  return sortByNewest(data.inventoryTransactions.filter((item) => item.type === 'adjustment_out')).slice(0, 100).map((item) => ({
+    ...item,
+    product_name: item.product_name || data.products.find((product) => product.id === item.product_id)?.name || `SP #${item.product_id}`,
+    quantity: Math.abs(Number(item.quantity || 0)),
+    unit_cost: Number(item.unit_cost || 0),
+    total_cost: Number(item.total_cost || 0),
+    reason: item.reason || 'Hàng lỗi'
+  }));
 }
 
 export function getDashboard() {
@@ -537,10 +628,12 @@ export function getDashboard() {
     productCount: data.products.filter((item) => item.is_active === 1).length,
     customerCount: data.customers.length,
     purchaseCount: data.purchases.length,
+    adjustmentCount: data.inventoryTransactions.filter((item) => item.type === 'adjustment_out').length,
     lowStock: data.products.filter((item) => item.is_active === 1 && Number(item.stock) <= 10).sort((a, b) => a.stock - b.stock).slice(0, 8),
     topProducts,
     recentOrders: sortByNewest(data.orders).slice(0, 8),
-    recentPurchases: sortByNewest(data.purchases).slice(0, 6)
+    recentPurchases: sortByNewest(data.purchases).slice(0, 6),
+    recentAdjustments: getAdjustments().slice(0, 6)
   };
 }
 
@@ -553,9 +646,11 @@ export function getReports() {
   const purchaseDay = data.purchases.filter((item) => isSameOrAfter(item.created_at, startOfDay(now))).reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
   const purchaseWeek = data.purchases.filter((item) => isSameOrAfter(item.created_at, startOfWeek(now))).reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
   const purchaseMonth = data.purchases.filter((item) => isSameOrAfter(item.created_at, startOfMonth(now))).reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
+  const sumAdjustments = (sinceDate) => data.inventoryTransactions.filter((item) => item.type === 'adjustment_out' && isSameOrAfter(item.created_at, sinceDate)).reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
   return {
     revenue: { day, week, month },
-    purchases: { day: purchaseDay, week: purchaseWeek, month: purchaseMonth }
+    purchases: { day: purchaseDay, week: purchaseWeek, month: purchaseMonth },
+    adjustments: { day: sumAdjustments(startOfDay(now)), week: sumAdjustments(startOfWeek(now)), month: sumAdjustments(startOfMonth(now)) }
   };
 }
 

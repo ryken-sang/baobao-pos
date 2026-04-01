@@ -45,11 +45,15 @@ export const api = {
   createProduct: (payload) => request('/products', { method: 'POST', body: JSON.stringify(payload) }),
   updateProduct: (id, payload) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteProduct: (id) => request(`/products/${id}`, { method: 'DELETE' }),
+  hardDeleteProduct: (id) => request(`/products/${id}/hard`, { method: 'DELETE' }),
   getCustomers: (search = '') => request(`/customers${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   createCustomer: (payload) => request('/customers', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteCustomer: (id) => request(`/customers/${id}`, { method: 'DELETE' }),
   getOrders: () => request('/orders'),
   getOrderById: (id) => request(`/orders/${id}`),
   createOrder: (payload) => request('/orders', { method: 'POST', body: JSON.stringify(payload) }),
   getPurchases: () => request('/purchases'),
-  createPurchase: (payload) => request('/purchases', { method: 'POST', body: JSON.stringify(payload) })
+  createPurchase: (payload) => request('/purchases', { method: 'POST', body: JSON.stringify(payload) }),
+  getAdjustments: () => request('/adjustments'),
+  createAdjustment: (payload) => request('/adjustments', { method: 'POST', body: JSON.stringify(payload) })
 };

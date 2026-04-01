@@ -13,8 +13,10 @@ import {
   createProduct,
   updateProduct,
   hideProduct,
+  deleteProduct,
   getCustomers,
   createCustomer,
+  deleteCustomer,
   getOrders,
   getOrderById,
   createOrder,
@@ -23,6 +25,8 @@ import {
   updateSettings,
   createPurchase,
   getPurchases,
+  getAdjustments,
+  createAdjustment,
   getReports
 } from './db.js';
 
@@ -105,7 +109,24 @@ app.delete('/api/products/:id', authRequired, requireOwner, asyncHandler(async (
   }
 }));
 
+app.delete('/api/products/:id/hard', authRequired, requireOwner, asyncHandler(async (req, res) => {
+  try {
+    await deleteProduct(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Không thể xóa hẳn sản phẩm.' });
+  }
+}));
+
 app.get('/api/customers', authRequired, asyncHandler(async (req, res) => res.json(await getCustomers(String(req.query.search || '')))));
+app.delete('/api/customers/:id', authRequired, requireOwner, asyncHandler(async (req, res) => {
+  try {
+    await deleteCustomer(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Không thể xóa khách hàng.' });
+  }
+}));
 app.post('/api/customers', authRequired, asyncHandler(async (req, res) => {
   if (!req.body.name) return res.status(400).json({ message: 'Tên khách hàng là bắt buộc.' });
   try {
@@ -135,6 +156,14 @@ app.post('/api/purchases', authRequired, asyncHandler(async (req, res) => {
     res.status(201).json(await createPurchase(req.body, req.user));
   } catch (error) {
     res.status(400).json({ message: error.message || 'Không thể nhập hàng.' });
+  }
+}));
+app.get('/api/adjustments', authRequired, asyncHandler(async (_req, res) => res.json(await getAdjustments())));
+app.post('/api/adjustments', authRequired, asyncHandler(async (req, res) => {
+  try {
+    res.status(201).json(await createAdjustment(req.body, req.user));
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Không thể xuất hủy hàng.' });
   }
 }));
 

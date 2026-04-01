@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import baobaoLogo from './assets/baobao-logo.jpg';
 
 const emptyProductForm = { sku: '', name: '', category: '', price: 0, cost: 0, stock: 0, unit: 'cái' };
 const emptyCustomerForm = { name: '', phone: '', email: '', note: '' };
 const emptySettings = { storeName: '', storePhone: '', storeAddress: '', invoiceFooter: '' };
 const emptyPurchaseForm = { product_id: '', quantity: 1, cost: 0, supplier: '', note: '' };
+const emptyAdjustmentForm = { product_id: '', quantity: 1, reason: 'Hàng lỗi', note: '' };
 const paymentOptions = [
   { value: 'cash', label: 'Tiền mặt' },
   { value: 'transfer', label: 'Chuyển khoản' },
@@ -42,8 +42,8 @@ function LoginScreen({ onLogin, loading, error }) {
   return (
     <div className="login-shell">
       <div className="login-card">
-        <div className="hero-badge">BaoBao POS V6</div>
-        <img className="brand-logo large image-logo" src={baobaoLogo} alt="BaoBao logo" />
+        <div className="hero-badge">BaoBao POS V8</div>
+        <div className="brand-logo large">BB</div>
         <h1>Đăng nhập cửa hàng</h1>
         <p className="muted center-text">Phiên bản tối ưu cho shop và trợ lý 🌷</p>
         {error ? <div className="alert error">{error}</div> : null}
@@ -89,6 +89,7 @@ export default function App() {
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  const [adjustments, setAdjustments] = useState([]);
   const [cart, setCart] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -100,6 +101,7 @@ export default function App() {
   const [productForm, setProductForm] = useState(emptyProductForm);
   const [customerForm, setCustomerForm] = useState(emptyCustomerForm);
   const [purchaseForm, setPurchaseForm] = useState(emptyPurchaseForm);
+  const [adjustmentForm, setAdjustmentForm] = useState(emptyAdjustmentForm);
   const [editingProductId, setEditingProductId] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -116,13 +118,15 @@ export default function App() {
       { key: 'customers', label: 'Khách', icon: '💁' },
       { key: 'orders', label: 'Đơn hàng', icon: '🧾' },
       { key: 'purchases', label: 'Nhập hàng', icon: '📥' },
+      { key: 'adjustments', label: 'Xuất hủy', icon: '🗑️' },
       { key: 'settings', label: 'Cài đặt', icon: '⚙️' }
     ];
     const assistantTabs = [
       { key: 'dashboard', label: 'Tổng quan', icon: '📊' },
       { key: 'pos', label: 'Lên đơn', icon: '🛒' },
       { key: 'orders', label: 'Đơn hàng', icon: '🧾' },
-      { key: 'purchases', label: 'Nhập hàng', icon: '📥' }
+      { key: 'purchases', label: 'Nhập hàng', icon: '📥' },
+      { key: 'adjustments', label: 'Xuất hủy', icon: '🗑️' }
     ];
     return isOwner ? ownerTabs : assistantTabs;
   }, [user, isOwner]);
@@ -137,8 +141,8 @@ export default function App() {
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [dashboardData, reportData, productData, customerData, orderData, purchaseData, settingsData] = await Promise.all([
-        api.getDashboard(), api.getReports(), api.getProducts(), api.getCustomers(), api.getOrders(), api.getPurchases(), api.getSettings()
+      const [dashboardData, reportData, productData, customerData, orderData, purchaseData, adjustmentData, settingsData] = await Promise.all([
+        api.getDashboard(), api.getReports(), api.getProducts(), api.getCustomers(), api.getOrders(), api.getPurchases(), api.getAdjustments(), api.getSettings()
       ]);
       setDashboard(dashboardData);
       setReports(reportData);
@@ -146,6 +150,7 @@ export default function App() {
       setCustomers(customerData);
       setOrders(orderData);
       setPurchases(purchaseData);
+      setAdjustments(adjustmentData);
       setSettings(settingsData);
     } catch (err) {
       if (err.status === 401) { api.clearToken(); setUser(null); }
@@ -189,6 +194,29 @@ export default function App() {
   const handleLogout = async () => {
     await api.logout();
     setUser(null); setCart([]); setSelectedOrder(null); setActiveTab('dashboard');
+  };
+
+  const handleDeleteCustomer = async (customer) => {
+    if (!window.confirm(`Xóa khách hàng "${customer.name}"?`)) return;
+    try {
+      await api.deleteCustomer(customer.id);
+      if (String(selectedCustomerId) === String(customer.id)) setSelectedCustomerId('');
+      pushSuccess('Đã xóa khách hàng.');
+      await loadAll();
+    } catch (err) {
+      pushError(err.message || 'Không thể xóa khách hàng.');
+    }
+  };
+
+  const handleHardDeleteProduct = async (product) => {
+    if (!window.confirm(`Xóa hẳn sản phẩm "${product.name}"? Chỉ nên xóa khi chưa có phát sinh.`)) return;
+    try {
+      await api.hardDeleteProduct(product.id);
+      pushSuccess('Đã xóa hẳn sản phẩm.');
+      await loadAll();
+    } catch (err) {
+      pushError(err.message || 'Không thể xóa hẳn sản phẩm.');
+    }
   };
 
   const addToCart = (product) => {
@@ -253,6 +281,16 @@ export default function App() {
     } catch (err) { pushError(err.message || 'Không thể nhập hàng.'); }
   };
 
+  const submitAdjustment = async (e) => {
+    e.preventDefault();
+    try {
+      await api.createAdjustment(adjustmentForm);
+      setAdjustmentForm(emptyAdjustmentForm);
+      pushSuccess('Đã xuất hủy và trừ tồn kho.');
+      await loadAll();
+    } catch (err) { pushError(err.message || 'Không thể xuất hủy hàng.'); }
+  };
+
   const openOrder = async (id) => {
     try { setSelectedOrder(await api.getOrderById(id)); }
     catch (err) { pushError(err.message || 'Không đọc được đơn hàng.'); }
@@ -264,14 +302,14 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar desktop-only">
-        <div className="brand-card"><img className="brand-logo image-logo" src={baobaoLogo} alt="BaoBao logo" /><div><h1>{settings.storeName || 'BaoBao POS'}</h1><p>{isOwner ? 'Chủ shop' : 'Trợ lý'} • V6</p></div></div>
+        <div className="brand-card"><div className="brand-logo">BB</div><div><h1>{settings.storeName || 'BaoBao POS'}</h1><p>{isOwner ? 'Chủ shop' : 'Trợ lý'} • V7</p></div></div>
         <nav className="nav-list">{tabs.map((tab) => <button key={tab.key} className={`nav-item ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}><span>{tab.icon}</span><span>{tab.label}</span></button>)}</nav>
         <div className="sidebar-note"><strong>Đồng bộ iPhone + PC</strong><p>Mọi thiết bị dùng cùng 1 server sẽ thấy cùng dữ liệu.</p><div className="tiny muted">API: {api.getApiUrl()}</div></div>
       </aside>
 
       <main className="main-content">
         <header className="topbar mobile-topbar">
-          <div><div className="hero-badge">BaoBao POS V6</div><h2>{tabs.find((tab) => tab.key === activeTab)?.label || 'BaoBao POS'}</h2><p className="muted">{settings.storeName || 'BaoBao POS'} • {user.name}</p></div>
+          <div><div className="hero-badge">BaoBao POS V8</div><h2>{tabs.find((tab) => tab.key === activeTab)?.label || 'BaoBao POS'}</h2><p className="muted">{settings.storeName || 'BaoBao POS'} • {user.name}</p></div>
           <div className="toolbar-actions"><button className="ghost-button" onClick={loadAll}>↻ Làm mới</button><button className="ghost-button" onClick={handleLogout}>Đăng xuất</button></div>
         </header>
 
@@ -286,6 +324,7 @@ export default function App() {
               <StatCard title="Doanh thu tuần này" value={currency(reports.revenue.week.revenue)} hint={`${reports.revenue.week.orders || 0} đơn`} />
               <StatCard title="Doanh thu tháng này" value={currency(reports.revenue.month.revenue)} hint={`${reports.revenue.month.orders || 0} đơn`} />
               <StatCard title="Tiền nhập tháng này" value={currency(reports.purchases.month)} hint={`${dashboard.purchaseCount || 0} phiếu nhập`} soft />
+              <StatCard title="Xuất hủy tháng này" value={currency(reports.adjustments?.month || 0)} hint={`${dashboard.adjustmentCount || 0} lần`} soft />
             </div>
             {isOwner ? <div className="stats-grid"><StatCard title="Lợi nhuận hôm nay" value={currency(reports.revenue.day.profit)} /><StatCard title="Lợi nhuận tuần này" value={currency(reports.revenue.week.profit)} /><StatCard title="Lợi nhuận tháng này" value={currency(reports.revenue.month.profit)} /><StatCard title="Giá vốn tháng này" value={currency(reports.revenue.month.cost)} soft /></div> : null}
             <div className="content-grid two-columns uneven-columns">
@@ -318,13 +357,13 @@ export default function App() {
 
         {!loading && activeTab === 'products' && isOwner && (
           <section className="content-grid two-columns page-bottom-space">
-            <div className="panel"><div className="panel-header wrap-mobile"><div><h3>Danh sách sản phẩm</h3><p className="muted tiny">Chủ shop quản lý giá nhập, tồn và giá gợi ý.</p></div><input className="search-input" placeholder="Tìm sản phẩm..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div><div className="stack-list">{products.map((product) => <div key={product.id} className="list-row product-row"><div><strong>{product.name}</strong><div className="muted tiny">{product.sku} • {product.category || 'Chưa phân loại'} • {product.unit}</div><div className="tiny price-compact">Giá gợi ý: {currency(product.price)} • Giá nhập: {currency(product.cost)}</div></div><div className="row-actions"><span className={`stock-badge ${product.stock <= 10 ? 'danger' : ''}`}>Tồn {product.stock}</span><button className="ghost-button small" onClick={() => { setEditingProductId(product.id); setProductForm({ sku: product.sku, name: product.name, category: product.category || '', price: product.price, cost: product.cost, stock: product.stock, unit: product.unit || 'cái' }); }}>Sửa</button><button className="ghost-button small danger-text" onClick={async () => { if (!window.confirm('Ẩn sản phẩm này?')) return; await api.deleteProduct(product.id); await loadAll(); }}>Ẩn</button></div></div>)}</div></div>
+            <div className="panel"><div className="panel-header wrap-mobile"><div><h3>Danh sách sản phẩm</h3><p className="muted tiny">Chủ shop quản lý giá nhập, tồn và giá gợi ý. Có thêm lần nhập cuối để dễ dò hàng.</p></div><input className="search-input" placeholder="Tìm sản phẩm..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div><div className="stack-list">{products.map((product) => <div key={product.id} className="list-row product-row"><div><strong>{product.name}</strong><div className="muted tiny">{product.sku} • {product.category || 'Chưa phân loại'} • {product.unit}</div><div className="tiny price-compact">Giá gợi ý: {currency(product.price)} • Giá nhập: {currency(product.cost)}</div><div className="tiny muted">Lần nhập cuối: {product.last_purchase_at ? formatDateTime(product.last_purchase_at) : 'Chưa có'}{product.last_purchase_cost ? ` • ${currency(product.last_purchase_cost)}` : ''}</div></div><div className="row-actions"><span className={`stock-badge ${product.stock <= 10 ? 'danger' : ''}`}>Tồn {product.stock}</span><button className="ghost-button small" onClick={() => { setEditingProductId(product.id); setProductForm({ sku: product.sku, name: product.name, category: product.category || '', price: product.price, cost: product.cost, stock: product.stock, unit: product.unit || 'cái' }); }}>Sửa</button><button className="ghost-button small warning-text" onClick={() => { setAdjustmentForm({ product_id: String(product.id), quantity: 1, reason: 'Hàng lỗi', note: '' }); setActiveTab('adjustments'); }}>Xuất hủy</button><button className="ghost-button small danger-text" onClick={async () => { if (!window.confirm('Ẩn sản phẩm này?')) return; await api.deleteProduct(product.id); await loadAll(); }}>Ẩn</button><button className="ghost-button small danger-text" onClick={() => handleHardDeleteProduct(product)}>Xóa hẳn</button></div></div>)}</div></div>
             <div className="panel"><div className="panel-header"><h3>{editingProductId ? 'Sửa sản phẩm' : 'Thêm sản phẩm'}</h3></div><form className="form-grid" onSubmit={submitProduct}><label><span>SKU</span><input required value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></label><label><span>Tên sản phẩm</span><input required value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></label><label><span>Danh mục</span><input value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })} /></label><label><span>Đơn vị</span><input value={productForm.unit} onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })} /></label><label><span>Giá gợi ý</span><input type="number" min="0" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></label><label><span>Giá nhập</span><input type="number" min="0" value={productForm.cost} onChange={(e) => setProductForm({ ...productForm, cost: e.target.value })} /></label><label><span>Tồn kho</span><input type="number" min="0" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} /></label><div className="form-actions"><button className="primary-button">{editingProductId ? 'Lưu thay đổi' : 'Thêm sản phẩm'}</button>{editingProductId ? <button type="button" className="ghost-button" onClick={() => { setEditingProductId(null); setProductForm(emptyProductForm); }}>Hủy sửa</button> : null}</div></form></div>
           </section>
         )}
 
         {!loading && activeTab === 'customers' && isOwner && (
-          <section className="content-grid two-columns page-bottom-space"><div className="panel"><div className="panel-header wrap-mobile"><div><h3>Danh sách khách hàng</h3></div><input className="search-input" placeholder="Tìm khách hàng..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} /></div><div className="stack-list">{customers.map((customer) => <div key={customer.id} className="list-row"><div><strong>{customer.name}</strong><div className="muted tiny">{customer.phone || 'Chưa có SĐT'} • {customer.email || 'Chưa có email'}</div></div><span className="stock-badge">{customer.points} điểm</span></div>)}</div></div><div className="panel"><div className="panel-header"><h3>Thêm khách hàng</h3></div><form className="form-grid" onSubmit={submitCustomer}><label><span>Tên khách</span><input required value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} /></label><label><span>Số điện thoại</span><input value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} /></label><label><span>Email</span><input value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} /></label><label className="field-block"><span>Ghi chú</span><textarea rows="4" value={customerForm.note} onChange={(e) => setCustomerForm({ ...customerForm, note: e.target.value })} /></label><button className="primary-button">Lưu khách hàng</button></form></div></section>
+          <section className="content-grid two-columns page-bottom-space"><div className="panel"><div className="panel-header wrap-mobile"><div><h3>Danh sách khách hàng</h3><p className="muted tiny">Có thể xóa các khách mẫu hoặc khách nhập nhầm. Khách lẻ mặc định sẽ giữ lại.</p></div><input className="search-input" placeholder="Tìm khách hàng..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} /></div><div className="stack-list">{customers.map((customer) => <div key={customer.id} className="list-row"><div><strong>{customer.name}</strong><div className="muted tiny">{customer.phone || 'Chưa có SĐT'} • {customer.email || 'Chưa có email'}</div></div><div className="row-actions"><span className="stock-badge">{customer.points} điểm</span><button className="ghost-button small danger-text" disabled={customer.name === 'Khách lẻ'} onClick={() => handleDeleteCustomer(customer)}>Xóa</button></div></div>)}</div></div><div className="panel"><div className="panel-header"><h3>Thêm khách hàng</h3></div><form className="form-grid" onSubmit={submitCustomer}><label><span>Tên khách</span><input required value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} /></label><label><span>Số điện thoại</span><input value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} /></label><label><span>Email</span><input value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} /></label><label className="field-block"><span>Ghi chú</span><textarea rows="4" value={customerForm.note} onChange={(e) => setCustomerForm({ ...customerForm, note: e.target.value })} /></label><button className="primary-button">Lưu khách hàng</button></form></div></section>
         )}
 
         {!loading && activeTab === 'orders' && (
@@ -333,6 +372,11 @@ export default function App() {
 
         {!loading && activeTab === 'purchases' && (
           <section className="content-grid two-columns uneven-columns page-bottom-space"><div className="panel"><div className="panel-header"><h3>Phiếu nhập hàng</h3><span className="tag">Tự lưu ngày giờ</span></div><form className="form-grid" onSubmit={submitPurchase}><label><span>Sản phẩm</span><select required value={purchaseForm.product_id} onChange={(e) => setPurchaseForm({ ...purchaseForm, product_id: e.target.value })}><option value="">Chọn sản phẩm</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label><label><span>Số lượng nhập</span><input type="number" min="1" value={purchaseForm.quantity} onChange={(e) => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })} /></label><label><span>Giá nhập / 1 SP</span><input type="number" min="0" value={purchaseForm.cost} onChange={(e) => setPurchaseForm({ ...purchaseForm, cost: e.target.value })} /></label><label><span>Nhà cung cấp</span><input value={purchaseForm.supplier} onChange={(e) => setPurchaseForm({ ...purchaseForm, supplier: e.target.value })} placeholder="Ví dụ: Xưởng lụa Latin" /></label><label className="field-block"><span>Ghi chú</span><textarea rows="4" value={purchaseForm.note} onChange={(e) => setPurchaseForm({ ...purchaseForm, note: e.target.value })} /></label><button className="primary-button">Lưu phiếu nhập</button></form></div><div className="panel"><div className="panel-header"><h3>Lịch sử nhập hàng</h3></div><div className="stack-list">{purchases.map((purchase) => <div key={purchase.id} className="list-row"><div><strong>{purchase.product_name}</strong><div className="muted tiny">{purchase.supplier || 'Chưa ghi NCC'} • {formatDateTime(purchase.created_at)} • {purchase.created_by}</div></div><div className="order-card-side"><strong>+{purchase.quantity}</strong><div className="muted tiny">{currency(purchase.total_cost)}</div></div></div>)}{!purchases.length ? <div className="empty-state">Chưa có phiếu nhập hàng nào.</div> : null}</div></div></section>
+        )}
+
+
+        {!loading && activeTab === 'adjustments' && (
+          <section className="content-grid two-columns uneven-columns page-bottom-space"><div className="panel"><div className="panel-header"><div><h3>Xuất hủy / trừ tồn</h3><p className="muted tiny">Dùng khi hàng lỗi, thất lạc, cũ hoặc cần bỏ bớt tồn kho.</p></div><span className="tag">Tự lưu ngày giờ</span></div><form className="form-grid" onSubmit={submitAdjustment}><label><span>Sản phẩm</span><select required value={adjustmentForm.product_id} onChange={(e) => setAdjustmentForm({ ...adjustmentForm, product_id: e.target.value })}><option value="">Chọn sản phẩm</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} • Tồn {product.stock}</option>)}</select></label><label><span>Số lượng xuất hủy</span><input type="number" min="1" value={adjustmentForm.quantity} onChange={(e) => setAdjustmentForm({ ...adjustmentForm, quantity: e.target.value })} /></label><label><span>Lý do</span><select value={adjustmentForm.reason} onChange={(e) => setAdjustmentForm({ ...adjustmentForm, reason: e.target.value })}><option value="Hàng lỗi">Hàng lỗi</option><option value="Hàng cũ">Hàng cũ</option><option value="Thất lạc">Thất lạc</option><option value="Hàng bể / dơ">Hàng bể / dơ</option><option value="Khác">Khác</option></select></label><label className="field-block"><span>Ghi chú</span><textarea rows="4" value={adjustmentForm.note} onChange={(e) => setAdjustmentForm({ ...adjustmentForm, note: e.target.value })} placeholder="Ví dụ: áo lỗi đường may, set cũ xả kho..." /></label><button className="primary-button danger-button">Lưu phiếu xuất hủy</button></form></div><div className="panel"><div className="panel-header"><h3>Lịch sử xuất hủy</h3><span className="tag">{adjustments.length} phiếu</span></div><div className="stack-list">{adjustments.map((item) => <div key={item.id} className="list-row"><div><strong>{item.product_name}</strong><div className="muted tiny">{item.reason || 'Hàng lỗi'} • {formatDateTime(item.created_at)} • {item.created_by}</div><div className="tiny muted">{item.note || 'Không có ghi chú'}</div></div><div className="order-card-side"><strong>-{item.quantity}</strong><div className="muted tiny">{currency(item.total_cost || 0)}</div></div></div>)}{!adjustments.length ? <div className="empty-state">Chưa có phiếu xuất hủy nào.</div> : null}</div></div></section>
         )}
 
         {!loading && activeTab === 'settings' && isOwner && (

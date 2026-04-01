@@ -238,6 +238,13 @@ export async function initializePostgresStore() {
     );
   `);
 
+  await pool.query(`
+    ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS product_name TEXT DEFAULT '';
+    ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT '';
+    ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS unit_cost INTEGER DEFAULT 0;
+    ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS total_cost INTEGER DEFAULT 0;
+  `);
+
   const defaults = buildDefaultData();
   const settingRows = await q('SELECT id FROM settings LIMIT 1');
   if (settingRows.length === 0) {
@@ -384,16 +391,35 @@ function mapOrder(row) {
 
 export async function getProducts(search = '') {
   const keyword = `%${search.trim().toLowerCase()}%`;
+  const baseQuery = `
+    SELECT p.*,
+           lp.created_at AS last_purchase_at,
+           lp.cost AS last_purchase_cost,
+           lp.supplier AS last_purchase_supplier
+    FROM products p
+    LEFT JOIN LATERAL (
+      SELECT created_at, cost, supplier
+      FROM purchases pu
+      WHERE pu.product_id = p.id
+      ORDER BY pu.created_at DESC
+      LIMIT 1
+    ) lp ON TRUE
+  `;
   const rows = search.trim()
     ? await q(
-        `SELECT * FROM products
-         WHERE is_active = TRUE
-           AND (LOWER(name) LIKE $1 OR LOWER(sku) LIKE $1 OR LOWER(category) LIKE $1)
-         ORDER BY created_at DESC`,
+        `${baseQuery}
+         WHERE p.is_active = TRUE
+           AND (LOWER(p.name) LIKE $1 OR LOWER(p.sku) LIKE $1 OR LOWER(p.category) LIKE $1)
+         ORDER BY p.created_at DESC`,
         [keyword]
       )
-    : await q('SELECT * FROM products WHERE is_active = TRUE ORDER BY created_at DESC');
-  return rows.map(mapProduct);
+    : await q(`${baseQuery} WHERE p.is_active = TRUE ORDER BY p.created_at DESC`);
+  return rows.map((row) => ({
+    ...mapProduct(row),
+    last_purchase_at: row.last_purchase_at,
+    last_purchase_cost: Number(row.last_purchase_cost || 0),
+    last_purchase_supplier: row.last_purchase_supplier || ''
+  }));
 }
 
 export async function getCustomers(search = '') {
@@ -482,6 +508,23 @@ export async function hideProduct(id) {
   if (!rows[0]) throw new Error('Không tìm thấy sản phẩm.');
 }
 
+export async function deleteProduct(id) {
+  const refs = await q(
+    `SELECT
+       (SELECT COUNT(*)::int FROM order_items WHERE product_id = $1) AS order_count,
+       (SELECT COUNT(*)::int FROM inventory_transactions WHERE product_id = $1) AS inventory_count,
+       (SELECT COUNT(*)::int FROM purchases WHERE product_id = $1) AS purchase_count`,
+    [id]
+  );
+  const ref = refs[0];
+  if (!ref) throw new Error('Không tìm thấy sản phẩm.');
+  if (Number(ref.order_count) > 0 || Number(ref.inventory_count) > 0 || Number(ref.purchase_count) > 0) {
+    throw new Error('Sản phẩm này đã có phát sinh kho hoặc đơn hàng, chỉ nên ẩn chứ không xóa hẳn.');
+  }
+  const rows = await q('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
+  if (!rows[0]) throw new Error('Không tìm thấy sản phẩm.');
+}
+
 export async function createCustomer(payload) {
   const rows = await q(
     `INSERT INTO customers (name, phone, email, note, points, created_at, updated_at)
@@ -489,6 +532,16 @@ export async function createCustomer(payload) {
     [String(payload.name).trim(), String(payload.phone || '').trim(), String(payload.email || '').trim(), String(payload.note || '').trim()]
   );
   return mapCustomer(rows[0]);
+}
+
+export async function deleteCustomer(id) {
+  const rows = await q('SELECT * FROM customers WHERE id = $1 LIMIT 1', [id]);
+  const customer = rows[0];
+  if (!customer) throw new Error('Không tìm thấy khách hàng.');
+  if (String(customer.name).trim().toLowerCase() === 'khách lẻ') {
+    throw new Error('Không thể xóa khách lẻ mặc định.');
+  }
+  await q('DELETE FROM customers WHERE id = $1', [id]);
 }
 
 export async function createOrder(payload, user) {
@@ -542,9 +595,9 @@ export async function createOrder(payload, user) {
 
       await q('UPDATE products SET stock = stock - $2, updated_at = NOW() WHERE id = $1', [product.id, quantity], client);
       await q(
-        `INSERT INTO inventory_transactions (product_id, type, quantity, note, created_at, created_by)
-         VALUES ($1, 'sale', $2, $3, NOW(), $4)`,
-        [product.id, -Math.abs(quantity), `Bán hàng ${orderNo}`, user.name],
+        `INSERT INTO inventory_transactions (product_id, product_name, type, quantity, note, reason, unit_cost, total_cost, created_at, created_by)
+         VALUES ($1, $2, 'sale', $3, $4, '', $5, $6, NOW(), $7)`,
+        [product.id, product.name, -Math.abs(quantity), `Bán hàng ${orderNo}`, Number(product.cost || 0), lineCost, user.name],
         client
       );
     }
@@ -588,9 +641,9 @@ export async function createPurchase(payload, user) {
 
     await q('UPDATE products SET stock = stock + $2, cost = $3, updated_at = NOW() WHERE id = $1', [productId, quantity, cost], client);
     await q(
-      `INSERT INTO inventory_transactions (product_id, type, quantity, note, created_at, created_by)
-       VALUES ($1, 'purchase', $2, $3, NOW(), $4)`,
-      [productId, quantity, `Nhập hàng #${purchaseRows[0].id}`, user.name],
+      `INSERT INTO inventory_transactions (product_id, product_name, type, quantity, note, reason, unit_cost, total_cost, created_at, created_by)
+       VALUES ($1, $2, 'purchase', $3, $4, '', $5, $6, NOW(), $7)`,
+      [productId, product.name, quantity, `Nhập hàng #${purchaseRows[0].id}`, cost, quantity * cost, user.name],
       client
     );
 
@@ -614,10 +667,63 @@ export async function getPurchases() {
   return rows.map((row) => ({ ...row, quantity: Number(row.quantity), cost: Number(row.cost), total_cost: Number(row.total_cost) }));
 }
 
+export async function createAdjustment(payload, user) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const productId = Number(payload.product_id);
+    const quantity = Number(payload.quantity || 0);
+    if (!productId || quantity <= 0) throw new Error('Sản phẩm và số lượng xuất hủy phải hợp lệ.');
+
+    const rows = await q('SELECT * FROM products WHERE id = $1 AND is_active = TRUE FOR UPDATE', [productId], client);
+    const product = rows[0];
+    if (!product) throw new Error('Không tìm thấy sản phẩm để xuất hủy.');
+    if (Number(product.stock) < quantity) throw new Error(`Tồn kho của ${product.name} không đủ để xuất hủy.`);
+
+    const reason = String(payload.reason || 'Hàng lỗi').trim();
+    const note = String(payload.note || '').trim();
+    const unitCost = Number(product.cost || 0);
+    const txRows = await q(
+      `INSERT INTO inventory_transactions (product_id, product_name, type, quantity, note, reason, unit_cost, total_cost, created_at, created_by)
+       VALUES ($1, $2, 'adjustment_out', $3, $4, $5, $6, $7, NOW(), $8)
+       RETURNING *`,
+      [productId, product.name, -Math.abs(quantity), note, reason, unitCost, unitCost * quantity, user.name],
+      client
+    );
+
+    await q('UPDATE products SET stock = stock - $2, updated_at = NOW() WHERE id = $1', [productId, quantity], client);
+    await client.query('COMMIT');
+    const row = txRows[0];
+    return { ...row, quantity: Math.abs(Number(row.quantity)), unit_cost: Number(row.unit_cost), total_cost: Number(row.total_cost) };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getAdjustments() {
+  const rows = await q(`SELECT id, product_id, COALESCE(product_name, p.name) AS product_name, quantity, note, COALESCE(reason, '') AS reason, unit_cost, total_cost, created_at, created_by
+                        FROM inventory_transactions it
+                        LEFT JOIN products p ON p.id = it.product_id
+                        WHERE type = 'adjustment_out'
+                        ORDER BY created_at DESC
+                        LIMIT 100`);
+  return rows.map((row) => ({
+    ...row,
+    quantity: Math.abs(Number(row.quantity)),
+    unit_cost: Number(row.unit_cost || 0),
+    total_cost: Number(row.total_cost || 0),
+    reason: row.reason || 'Hàng lỗi'
+  }));
+}
+
 export async function getDashboard() {
-  const [orders, purchases, products, customers, orderItems] = await Promise.all([
+  const [orders, purchases, adjustments, products, customers, orderItems] = await Promise.all([
     getOrders(),
     getPurchases(),
+    getAdjustments(),
     getProducts(),
     getCustomers(),
     q('SELECT product_name, quantity FROM order_items')
@@ -639,15 +745,17 @@ export async function getDashboard() {
     productCount: products.filter((item) => item.is_active === 1).length,
     customerCount: customers.length,
     purchaseCount: purchases.length,
+    adjustmentCount: adjustments.length,
     lowStock: products.filter((item) => item.is_active === 1 && Number(item.stock) <= 10).sort((a, b) => a.stock - b.stock).slice(0, 8),
     topProducts,
     recentOrders: orders.slice(0, 8),
-    recentPurchases: purchases.slice(0, 6)
+    recentPurchases: purchases.slice(0, 6),
+    recentAdjustments: adjustments.slice(0, 6)
   };
 }
 
 export async function getReports() {
-  const [orders, purchases] = await Promise.all([getOrders(), getPurchases()]);
+  const [orders, purchases, adjustments] = await Promise.all([getOrders(), getPurchases(), getAdjustments()]);
   const now = new Date();
   const dayStart = startOfDay(now);
   const weekStart = startOfWeek(now);
@@ -656,8 +764,10 @@ export async function getReports() {
   const week = buildPeriodMetrics(orders, weekStart);
   const month = buildPeriodMetrics(orders, monthStart);
   const sumPurchases = (sinceDate) => purchases.filter((item) => isSameOrAfter(item.created_at, sinceDate)).reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
+  const sumAdjustments = (sinceDate) => adjustments.filter((item) => isSameOrAfter(item.created_at, sinceDate)).reduce((sum, item) => sum + Number(item.total_cost || 0), 0);
   return {
     revenue: { day, week, month },
-    purchases: { day: sumPurchases(dayStart), week: sumPurchases(weekStart), month: sumPurchases(monthStart) }
+    purchases: { day: sumPurchases(dayStart), week: sumPurchases(weekStart), month: sumPurchases(monthStart) },
+    adjustments: { day: sumAdjustments(dayStart), week: sumAdjustments(weekStart), month: sumAdjustments(monthStart) }
   };
 }
